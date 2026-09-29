@@ -1,0 +1,57 @@
+# Signal Matin — Docker Compose
+#
+#   cp config.example.yaml config.yaml   # obligatoire avant le premier lancement
+#   docker compose up -d                 # page liseuse sur le réseau local
+#   docker compose run --rm cli generate # génération ponctuelle JSON + HTML + PDF
+
+x-signal-matin: &signal-matin
+  build:
+    context: .
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  image: signal-matin:latest
+  init: true
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    TZ: ${TZ:-Europe/Paris}
+  volumes:
+    - ./output:/app/output
+    - type: bind
+      source: ./config.yaml
+      target: /app/config.yaml
+      read_only: true
+      bind:
+        create_host_path: false
+    # Google Calendar (facultatif) : à décommenter une fois credentials.json
+    # et token.json créés sur l'hôte (signal-matin auth-google).
+    # - ./credentials.json:/app/credentials.json:ro
+    # - ./token.json:/app/token.json:ro
+
+services:
+  # Serveur liseuse : publie l'EPUB du jour et le renouvelle chaque matin.
+  ereader:
+    <<: *signal-matin
+    command:
+      - serve
+      - --host=0.0.0.0
+      - --port=8844
+      - --refresh-at=${REFRESH_AT:-08:00}
+      - --format=${EREADER_FORMAT:-epub}
+    ports:
+      - "${SIGNAL_MATIN_BIND:-0.0.0.0}:${SIGNAL_MATIN_PORT:-8844}:8844"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8844/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # CLI ponctuelle : docker compose run --rm cli <commande> [options]
+  cli:
+    <<: *signal-matin
+    profiles: ["cli"]
+    command: ["--help"]

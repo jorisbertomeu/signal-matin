@@ -159,6 +159,53 @@ cp config.example.yaml config.yaml
 python main.py --preview --demo
 ```
 
+## Installation avec Docker
+
+L'image contient Python, les dépendances verrouillées par `uv.lock`, Chromium
+headless et les polices nécessaires au rendu. Aucun secret n'y est copié :
+`config.yaml`, `.env` et les fichiers OAuth restent sur la machine hôte et sont
+montés au lancement.
+
+```bash
+cp config.example.yaml config.yaml   # obligatoire, même en mode démo
+docker compose build
+```
+
+Générations ponctuelles (les fichiers arrivent dans `./output`) :
+
+```bash
+docker compose run --rm cli generate            # JSON + HTML + PDF
+docker compose run --rm cli ereader --format both
+docker compose run --rm cli generate --demo --mode compact
+```
+
+Serveur liseuse permanent, renouvelé chaque matin :
+
+```bash
+docker compose up -d
+docker compose logs ereader    # affiche le code d'association
+```
+
+Dans un conteneur, l'adresse affichée est l'IP interne de Docker (`172.x.x.x`) :
+sur la liseuse, utilise l'IP de la machine hôte sur le Wi-Fi, par exemple
+`http://192.168.1.20:8844/`. Pour obtenir un nouveau code d'association :
+
+```bash
+docker compose run --rm cli serve --host 0.0.0.0 --show-url-only
+```
+
+Variables facultatives (dans `.env` ou l'environnement) : `TZ`
+(`Europe/Paris` par défaut), `REFRESH_AT` (`08:00`), `EREADER_FORMAT`
+(`epub` ou `both`), `SIGNAL_MATIN_PORT` (`8844`) et `SIGNAL_MATIN_BIND`
+(`0.0.0.0` ; mets l'IP locale de l'hôte pour restreindre l'écoute). Sous Linux,
+exporte `UID` et `GID` avant le build si ton utilisateur n'est pas `1000`, pour
+que les fichiers de `./output` t'appartiennent.
+
+Google Calendar : l'autorisation OAuth ouvre un navigateur et se fait donc une
+fois sur l'hôte (`signal-matin auth-google`), puis décommente les montages de
+`credentials.json` et `token.json` dans `compose.yaml`. L'impression n'est pas
+prise en charge depuis le conteneur : génère le PDF, puis imprime depuis l'hôte.
+
 ## Utilisation quotidienne
 
 Les commandes ci-dessous supposent que l'environnement est activé. Pour
